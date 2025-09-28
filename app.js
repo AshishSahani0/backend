@@ -49,7 +49,7 @@ connectDB();
 // ------------------- MIDDLEWARE -------------------
 const allowedOrigins = [
   'http://localhost:5173', // dev
-  'https://neural-knights-133-saarthi.vercel.app', // prod
+   process.env.FRONTEND_URL // prod
 ];
 
 app.use(cors({
