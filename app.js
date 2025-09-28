@@ -30,11 +30,12 @@ const server = http.createServer(app);
 // ------------------- SOCKET.IO -------------------
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL,
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   },
 });
+
 
 // Setup separate namespaces
 setupBookedSessionSocket(io);
@@ -46,13 +47,24 @@ app.set("io", io); // make io accessible in controllers if needed
 connectDB();
 
 // ------------------- MIDDLEWARE -------------------
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+];
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS blocked for origin: ${origin}`));
+      }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   })
 );
+
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
