@@ -3,50 +3,18 @@ import User from "../models/userSchema.js";
 import dotenv from "dotenv";
 dotenv.config({ quiet: true });
 
-export const isAuthenticated = async (req, res, next) => {
+export const isAuthenticated = (req, res, next) => {
+  const token = req.cookies.token; // ✅ read cookie
+  if (!token) return res.status(401).json({ success: false, message: "Not logged in" });
   try {
-    let token = req.cookies?.token;
-    console.log("Cookies:", req.cookies);
-    console.log("Auth Header:", req.headers.authorization);
-
-    
-
-    if (!token && req.headers.authorization?.startsWith("Bearer")) {
-      token = req.headers.authorization.split(" ")[1];
-      console.log("🔐 Header token:", token);
-    }
-
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated. Please log in.",
-      });
-    }
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-
-    const user = await User.findById(decoded.id);
-    
-
-    if (!user || !user.isActive) {
-      console.log("❌ User not found or inactive");
-      return res.status(401).json({
-        success: false,
-        message: "User not found or account is deactivated.",
-      });
-    }
-
-    req.user = user;
+    req.user = decoded;
     next();
-  } catch (error) {
-    console.error("Auth Middleware Error:", error.message);
-    res.status(401).json({
-      success: false,
-      message: "Invalid or expired token.",
-    });
+  } catch {
+    return res.status(401).json({ success: false, message: "Token invalid or expired" });
   }
 };
+
 
 
 export const isAuthorized = (...roles) => {
