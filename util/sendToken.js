@@ -6,21 +6,23 @@ export const sendToken = (user, statusCode, message, res) => {
     const token = user.getJWTToken();
     const cookieExpireDays = parseInt(process.env.COOKIE_EXPIRE || "7", 10);
 
+    const isProd = process.env.NODE_ENV === "production";
+
     const cookieOptions = {
       expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
       httpOnly: true,
-      secure:process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+      secure: isProd,           // Only true in production
+      sameSite: isProd ? "None" : "Lax", // Lax for local dev
       path: "/",
     };
 
     res
       .status(statusCode)
       .cookie("token", token, cookieOptions)
-      .json({ 
-        success: true, 
-        message, 
-        token // send token in response body too for header-based requests if needed
+      .json({
+        success: true,
+        message,
+        token, // optional: for header-based requests
       });
   } catch (error) {
     console.error("Error in sendToken:", error.message);
@@ -30,3 +32,4 @@ export const sendToken = (user, statusCode, message, res) => {
     });
   }
 };
+
