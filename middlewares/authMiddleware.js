@@ -6,6 +6,9 @@ dotenv.config({ quiet: true });
 export const isAuthenticated = async (req, res, next) => {
   try {
     let token = req.cookies?.token;
+    console.log("Cookies:", req.cookies);
+    console.log("Auth Header:", req.headers.authorization);
+
     
 
     if (!token && req.headers.authorization?.startsWith("Bearer")) {
