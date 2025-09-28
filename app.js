@@ -48,22 +48,22 @@ connectDB();
 
 // ------------------- MIDDLEWARE -------------------
 const allowedOrigins = [
-  'https://neural-knights-133-saarthi.vercel.app',
+  'http://localhost:5173', // dev
+  'https://neural-knights-133-saarthi.vercel.app', // prod
 ];
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS blocked for origin: ${origin}`));
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-  })
-);
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked for origin: ${origin}`));
+    }
+  },
+  credentials: true,
+  methods: ["GET","POST","PUT","DELETE","PATCH"]
+}));
+
 
 app.use(cookieParser());
 app.use(express.json());
