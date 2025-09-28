@@ -9,8 +9,8 @@ export const sendToken = (user, statusCode, message, res) => {
     const cookieOptions = {
       expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",  // must be true in prod
-      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax", // 'None' allows cross-site cookies
+      secure:true,
+      sameSite: "None",
       path: "/",
     };
 
