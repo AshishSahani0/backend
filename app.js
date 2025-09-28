@@ -27,6 +27,12 @@ dotenv.config({ quiet: true });
 const app = express();
 const server = http.createServer(app);
 
+
+const allowedOrigins = [
+  'http://localhost:5173', // dev
+   process.env.FRONTEND_URL // prod
+];
+
 // ------------------- SOCKET.IO -------------------
 const io = new Server(server, {
   cors: {
@@ -47,10 +53,7 @@ app.set("io", io); // make io accessible in controllers if needed
 connectDB();
 
 // ------------------- MIDDLEWARE -------------------
-const allowedOrigins = [
-  'http://localhost:5173', // dev
-   process.env.FRONTEND_URL // prod
-];
+
 
 app.use(cors({
   origin: function(origin, callback) {
