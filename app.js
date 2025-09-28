@@ -33,21 +33,7 @@ const allowedOrigins = [
    process.env.FRONTEND_URL // prod
 ];
 
-// ------------------- SOCKET.IO -------------------
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    credentials: true,
-  },
-});
 
-
-// Setup separate namespaces
-setupBookedSessionSocket(io);
-setupAnonymousSessionSocket(io);
-
-app.set("io", io); // make io accessible in controllers if needed
 
 // ------------------- DATABASE -------------------
 connectDB();
@@ -82,6 +68,23 @@ app.use("/api/admin", adminRouter);
 app.use("/api/anonymous-chat", anonymousChatRouter);
 app.use("/api/journal", journalRouter); 
 app.use("/api/emergency", emergencyRouter); 
+
+
+// ------------------- SOCKET.IO -------------------
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true,
+  },
+});
+
+
+// Setup separate namespaces
+setupBookedSessionSocket(io);
+setupAnonymousSessionSocket(io);
+
+app.set("io", io); // make io accessible in controllers if needed
 
 // ------------------- HEALTH CHECK -------------------
 app.get("/", (req, res) => {
