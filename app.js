@@ -48,7 +48,7 @@ connectDB();
 
 // ------------------- MIDDLEWARE -------------------
 const allowedOrigins = [
-  process.env.FRONTEND_URL,
+  'https://neural-knights-133-saarthi.vercel.app',
 ];
 
 app.use(
