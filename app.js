@@ -30,7 +30,7 @@ const server = http.createServer(app);
 
 const allowedOrigins = [
   'http://localhost:5173', // dev
-   'https://neural-knights-133-saarthi-gn9r8l6st.vercel.app' // prod
+   FRONTEND_URL=https://neural-knights-133-saarthi.vercel.app
 ];
 
 
