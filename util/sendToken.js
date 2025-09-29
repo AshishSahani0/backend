@@ -11,7 +11,7 @@ export const sendToken = (user, statusCode, message, res) => {
     const cookieOptions = {
       expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
       httpOnly: true,
-      secure: isProd,           // Only true in production
+      secure: isProd,? "None" : "Lax",           // Only true in production
       sameSite: isProd ? "None" : "Lax", // Lax for local dev
       path: "/",
     };
