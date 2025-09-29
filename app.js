@@ -14,12 +14,12 @@ import assessmentRoutes from "./routes/assessmentRoutes.js";
 import adminRouter from "./routes/adminRouter.js";
 import chatRouter from "./routes/chatRoutes.js";
 import anonymousChatRouter from "./routes/anonymousChatRouter.js";
+import journalRouter from "./routes/journalRoutes.js";
+import emergencyRouter from "./routes/emergencyRoutes.js";
 
 // Socket handlers (separated)
 import { setupBookedSessionSocket } from "./socket/bookedSessionSocket.js";
 import { setupAnonymousSessionSocket } from "./socket/anonymousSessionSocket.js";
-import journalRouter from "./routes/journalRoutes.js";
-import emergencyRouter from "./routes/emergencyRoutes.js";
 
 // Load environment variables
 dotenv.config({ quiet: true });
@@ -27,32 +27,17 @@ dotenv.config({ quiet: true });
 const app = express();
 const server = http.createServer(app);
 
-
-const allowedOrigins = [
-  'http://localhost:5173',
-  process.env.FRONTEND_URL || 'https://neural-knights-133-saarthi.vercel.app',
-];
-
-
-
 // ------------------- DATABASE -------------------
 connectDB();
 
 // ------------------- MIDDLEWARE -------------------
 
-
+// Allow all origins
 app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS blocked for origin: ${origin}`));
-    }
-  },
-  credentials: true,
-  methods: ["GET","POST","PUT","DELETE","PATCH"]
+  origin: "*",
+  credentials: true, // keep this if your frontend uses cookies/auth headers
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
 }));
-
 
 app.use(cookieParser());
 app.use(express.json());
@@ -66,19 +51,17 @@ app.use("/api/chat", chatRouter);
 app.use("/api/assessment", assessmentRoutes);
 app.use("/api/admin", adminRouter);
 app.use("/api/anonymous-chat", anonymousChatRouter);
-app.use("/api/journal", journalRouter); 
-app.use("/api/emergency", emergencyRouter); 
-
+app.use("/api/journal", journalRouter);
+app.use("/api/emergency", emergencyRouter);
 
 // ------------------- SOCKET.IO -------------------
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: "*", // allow all origins for Socket.IO as well
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   },
 });
-
 
 // Setup separate namespaces
 setupBookedSessionSocket(io);
