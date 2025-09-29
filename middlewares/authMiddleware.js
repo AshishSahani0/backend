@@ -3,15 +3,38 @@ import User from "../models/userSchema.js";
 import dotenv from "dotenv";
 dotenv.config({ quiet: true });
 
-export const isAuthenticated = (req, res, next) => {
-  const token = req.cookies.token; // ✅ read cookie
-  if (!token) return res.status(401).json({ success: false, message: "Not logged in" });
+
+
+export const isAuthenticated = async (req, res, next) => {
   try {
+    // ✅ Get token from cookie or Authorization header
+    let token = req.cookies?.token;
+
+    if (!token && req.headers.authorization?.startsWith("Bearer")) {
+      token = req.headers.authorization.split(" ")[1];
+    }
+
+    // ❌ No token found
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Not logged in",
+      });
+    }
+
+    // ✅ Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+
+    // ✅ Attach user to request
+    req.user = await User.findById(decoded.id).select("-password");
+
     next();
-  } catch {
-    return res.status(401).json({ success: false, message: "Token invalid or expired" });
+  } catch (err) {
+    console.error("Auth error:", err.message);
+    return res.status(401).json({
+      success: false,
+      message: "Invalid or expired token",
+    });
   }
 };
 
