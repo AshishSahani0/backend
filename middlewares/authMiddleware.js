@@ -4,17 +4,17 @@ import dotenv from "dotenv";
 dotenv.config({ quiet: true });
 
 
-
 export const isAuthenticated = async (req, res, next) => {
   try {
-    // ✅ Get token from cookie or Authorization header
+    // ✅ Try getting token from cookie first
     let token = req.cookies?.token;
 
-    if (!token && req.headers.authorization?.startsWith("Bearer")) {
+    // ✅ If no token in cookie, try Authorization header
+    if (!token && req.headers.authorization?.startsWith("Bearer ")) {
       token = req.headers.authorization.split(" ")[1];
     }
 
-    // ❌ No token found
+    // ❌ No token at all
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -24,19 +24,25 @@ export const isAuthenticated = async (req, res, next) => {
 
     // ✅ Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // ✅ Attach user to request
     req.user = await User.findById(decoded.id).select("-password");
+
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
     next();
   } catch (err) {
-    console.error("Auth error:", err.message);
+    console.error("isAuthenticated error:", err.message);
     return res.status(401).json({
       success: false,
       message: "Invalid or expired token",
     });
   }
 };
+
 
 
 
