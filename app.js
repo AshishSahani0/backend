@@ -34,10 +34,11 @@ connectDB();
 
 // Allow all origins
 app.use(cors({
-  origin:["https://neural-knights-133-saarthi.vercel.app"],
-  credentials: true, // keep this if your frontend uses cookies/auth headers
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+  origin: ["https://neural-knights-133-saarthi.vercel.app"], // frontend
+  credentials: true, // very important
+  methods: ["GET","POST","PUT","DELETE","PATCH"],
 }));
+
 
 // ------------------- SOCKET.IO -------------------
 const io = new Server(server, {
