@@ -155,33 +155,45 @@ export const resendOTP = async (req, res) => {
 
 // -------------------- LOGIN USER --------------------
 export const loginUser = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: "Email and password are required." });
-    }
+  const { email, password } = req.body;
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() }).select("+password");
-    if (!user) {
-      return res.status(401).json({ success: false, message: "Invalid email or password." });
-    }
-    if (!user.accountVerified) {
-      return res.status(403).json({ success: false, message: "Your account is not verified. Please check your email for an OTP." });
-    }
-    if (!user.isActive) {
-      return res.status(403).json({ success: false, message: "Your account has been deactivated." });
-    }
-
-    const isPasswordMatch = await bcrypt.compare(password, user.password);
-    if (!isPasswordMatch) {
-      return res.status(401).json({ success: false, message: "Invalid email or password." });
-    }
-
-    sendToken(user, 200, "Login successful", res);
-  } catch (error) {
-    console.error("Login Error:", error);
-    res.status(500).json({ success: false, message: "Server error during login." });
+  const user = await User.findOne({ email });
+  if (!user || !(await user.comparePassword(password))) {
+    return res.status(401).json({ success: false, message: "Invalid credentials" });
   }
+
+  // ✅ Create access token
+  const accessToken = jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: "15m" }
+  );
+
+  // ✅ Create refresh token
+  const refreshToken = jwt.sign(
+    { id: user._id },
+    process.env.JWT_REFRESH_SECRET,
+    { expiresIn: "7d" }
+  );
+
+  // ✅ Set refresh token as HTTP-only cookie
+  res.cookie("refreshToken", refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "Strict",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  });
+
+  res.json({
+    success: true,
+    token: accessToken,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
+  });
 };
 
 // -------------------- LOGOUT USER --------------------
@@ -322,49 +334,31 @@ export const getMe = async (req, res) => {
 
 export const refreshToken = async (req, res) => {
   try {
-    const refreshToken = req.cookies?.refreshToken;
+    const user = req.user; // Populated by isRefreshTokenAuthenticated middleware
 
-    if (!refreshToken) {
-      return res.status(401).json({ message: "No refresh token provided" });
-    }
+    // Generate new access token
+    const accessToken = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
 
-    // Verify refresh token
-    jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, async (err, decoded) => {
-      if (err) {
-        return res.status(403).json({ message: "Invalid refresh token" });
-      }
+    // Optionally rotate refresh token
+    const newRefreshToken = jwt.sign(
+      { id: user._id },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: "7d" }
+    );
 
-      const user = await User.findById(decoded.id);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // Create new access token
-      const newAccessToken = jwt.sign(
-        { id: user._id, role: user.role },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN }
-      );
-
-      // Optionally: refresh the refresh token if nearing expiration
-      const newRefreshToken = jwt.sign(
-        { id: user._id },
-        process.env.REFRESH_TOKEN_SECRET,
-        { expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN }
-      );
-
-      // Set refresh token in HTTP-only cookie
-      res.cookie("refreshToken", newRefreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "Strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
-
-      return res.json({ token: newAccessToken });
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
+
+    res.json({ success: true, token: accessToken });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
