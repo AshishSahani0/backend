@@ -34,7 +34,7 @@ connectDB();
 
 // Allow all origins
 app.use(cors({
-  origin: "*",
+  origin:"https://neural-knights-133-saarthi.vercel.app",
   credentials: true, // keep this if your frontend uses cookies/auth headers
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
 }));
@@ -57,7 +57,7 @@ app.use("/api/emergency", emergencyRouter);
 // ------------------- SOCKET.IO -------------------
 const io = new Server(server, {
   cors: {
-    origin: "*", // allow all origins for Socket.IO as well
+    origin:"https://neural-knights-133-saarthi.vercel.app",
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   },
