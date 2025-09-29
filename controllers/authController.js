@@ -322,28 +322,49 @@ export const getMe = async (req, res) => {
 
 export const refreshToken = async (req, res) => {
   try {
-    const user = req.user; // Populated by isRefreshTokenAuthenticated middleware
-    
-    // Generate a new JWT access token
-    const newToken = user.getJWTToken();
-    const cookieExpireDays = parseInt(process.env.COOKIE_EXPIRE || "7", 10);
-    
-    // Set cookie options
-    const cookieOptions = {
-      expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "Strict" : "Lax",
-      path: "/",
-    };
+    const refreshToken = req.cookies?.refreshToken;
 
-    res.status(200).cookie("token", newToken, cookieOptions).json({
-      success: true,
-      message: "Token refreshed successfully.",
-      token: newToken, // Send the new token in the body for the interceptor
+    if (!refreshToken) {
+      return res.status(401).json({ message: "No refresh token provided" });
+    }
+
+    // Verify refresh token
+    jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, async (err, decoded) => {
+      if (err) {
+        return res.status(403).json({ message: "Invalid refresh token" });
+      }
+
+      const user = await User.findById(decoded.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Create new access token
+      const newAccessToken = jwt.sign(
+        { id: user._id, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN }
+      );
+
+      // Optionally: refresh the refresh token if nearing expiration
+      const newRefreshToken = jwt.sign(
+        { id: user._id },
+        process.env.REFRESH_TOKEN_SECRET,
+        { expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN }
+      );
+
+      // Set refresh token in HTTP-only cookie
+      res.cookie("refreshToken", newRefreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+
+      return res.json({ token: newAccessToken });
     });
   } catch (error) {
-    console.error("Token Refresh Error:", error);
-    res.status(500).json({ success: false, message: "Server error during token refresh." });
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
   }
 };
