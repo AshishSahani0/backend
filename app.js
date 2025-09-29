@@ -34,10 +34,26 @@ connectDB();
 
 // Allow all origins
 app.use(cors({
-  origin:"https://neural-knights-133-saarthi.vercel.app",
-  credentials: true, // keep this if your frontend uses cookies/auth headers
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+  origin: ["https://neural-knights-133-saarthi.vercel.app"], // frontend
+  credentials: true, // very important
+  methods: ["GET","POST","PUT","DELETE","PATCH"],
 }));
+
+
+// ------------------- SOCKET.IO -------------------
+const io = new Server(server, {
+  cors: {
+    origin:["https://neural-knights-133-saarthi.vercel.app"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true,
+  },
+});
+
+// Setup separate namespaces
+setupBookedSessionSocket(io);
+setupAnonymousSessionSocket(io);
+
+app.set("io", io); 
 
 app.use(cookieParser());
 app.use(express.json());
@@ -54,20 +70,9 @@ app.use("/api/anonymous-chat", anonymousChatRouter);
 app.use("/api/journal", journalRouter);
 app.use("/api/emergency", emergencyRouter);
 
-// ------------------- SOCKET.IO -------------------
-const io = new Server(server, {
-  cors: {
-    origin:"https://neural-knights-133-saarthi.vercel.app",
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    credentials: true,
-  },
-});
 
-// Setup separate namespaces
-setupBookedSessionSocket(io);
-setupAnonymousSessionSocket(io);
 
-app.set("io", io); // make io accessible in controllers if needed
+
 
 // ------------------- HEALTH CHECK -------------------
 app.get("/", (req, res) => {
