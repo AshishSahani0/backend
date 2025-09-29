@@ -153,55 +153,68 @@ export const resendOTP = async (req, res) => {
   }
 };
 
+
 // -------------------- LOGIN USER --------------------
 export const loginUser = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: "Email and password are required." });
-    }
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: "Email and password are required." });
+    }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() }).select("+password");
-    if (!user) {
-      return res.status(401).json({ success: false, message: "Invalid email or password." });
-    }
-    if (!user.accountVerified) {
-      return res.status(403).json({ success: false, message: "Your account is not verified. Please check your email for an OTP." });
-    }
-    if (!user.isActive) {
-      return res.status(403).json({ success: false, message: "Your account has been deactivated." });
-    }
+    const user = await User.findOne({ email: email.toLowerCase().trim() }).select("+password");
+    if (!user) {
+      return res.status(401).json({ success: false, message: "Invalid email or password." });
+    }
+    if (!user.accountVerified) {
+      return res.status(403).json({ success: false, message: "Your account is not verified. Please check your email for an OTP." });
+    }
+    if (!user.isActive) {
+      return res.status(403).json({ success: false, message: "Your account has been deactivated." });
+    }
 
-    const isPasswordMatch = await bcrypt.compare(password, user.password);
-    if (!isPasswordMatch) {
-      return res.status(401).json({ success: false, message: "Invalid email or password." });
-    }
-
-    sendToken(user, 200, "Login successful", res);
-  } catch (error) {
-    console.error("Login Error:", error);
-    res.status(500).json({ success: false, message: "Server error during login." });
-  }
+    const isPasswordMatch = await bcrypt.compare(password, user.password);
+    if (!isPasswordMatch) {
+      return res.status(401).json({ success: false, message: "Invalid email or password." });
+    }
+    // sendToken (in util/sendToken.js) must be updated to set both 'token' and 'refreshToken'
+    sendToken(user, 200, "Login successful", res);
+  } catch (error) {
+    console.error("Login Error:", error);
+    res.status(500).json({ success: false, message: "Server error during login." });
+  }
 };
 
 // -------------------- LOGOUT USER --------------------
 export const logoutUser = (req, res) => {
-  try {
-    res.status(200)
-      .cookie("token", "", {
+  try {
+    const isProd = process.env.NODE_ENV === "production";
+    
+    // Base options for cookie clearing
+    const expiredOptions = {
         expires: new Date(0),
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "Strict" : "Lax",
-        path: "/",
-      })
-      .json({ success: true, message: "Logged out successfully" });
-  } catch (error) {
-    console.error("Logout Error:", error);
-    res.status(500).json({ success: false, message: "Logout failed." });
-  }
-};
+        secure: isProd,
+        // CRITICAL: Must use SameSite: None and Secure: true for cross-domain in production
+        sameSite: isProd ? "None" : "Lax",
+        path: "/", // Path used for the 'token' cookie
+    };
+    
+    // Refresh token path must match the setting path
+    const refreshTokenExpiredOptions = {
+        ...expiredOptions,
+        path: "/api/auth", // Assumed path used to set refreshToken for security
+    };
 
+    res.status(200)
+      .cookie("token", "", expiredOptions) // Clear Access Token
+      .cookie("refreshToken", "", refreshTokenExpiredOptions) // Clear Refresh Token
+      .json({ success: true, message: "Logged out successfully" });
+  } catch (error) {
+    console.error("Logout Error:", error);
+    res.status(500).json({ success: false, message: "Logout failed." });
+  }
+};
 // -------------------- FORGOT PASSWORD --------------------
 export const forgotPassword = async (req, res) => {
   try {
@@ -320,30 +333,41 @@ export const getMe = async (req, res) => {
   }
 };
 
-export const refreshToken = async (req, res) => {
-  try {
-    const user = req.user; // Populated by isRefreshTokenAuthenticated middleware
-    
-    // Generate a new JWT access token
-    const newToken = user.getJWTToken();
-    const cookieExpireDays = parseInt(process.env.COOKIE_EXPIRE || "7", 10);
-    
-    // Set cookie options
-    const cookieOptions = {
-      expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "Strict" : "Lax",
-      path: "/",
-    };
+// ... (imports remain the same)
 
-    res.status(200).cookie("token", newToken, cookieOptions).json({
-      success: true,
-      message: "Token refreshed successfully.",
-      token: newToken, // Send the new token in the body for the interceptor
-    });
-  } catch (error) {
-    console.error("Token Refresh Error:", error);
-    res.status(500).json({ success: false, message: "Server error during token refresh." });
-  }
+// ... (previous functions remain the same)
+
+export const refreshToken = async (req, res) => {
+  try {
+    const user = req.user; // Populated by isRefreshTokenAuthenticated middleware
+    
+    // Generate a new JWT access token
+    const newToken = user.getJWTToken();
+    
+    // Get access token expiry in days for frontend cookie use
+    const cookieExpireDays = parseInt(process.env.COOKIE_EXPIRE || "1", 10);
+    
+    // Set cookie options for the ACCESS TOKEN
+    const cookieOptions = {
+      expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      // SameSite: 'None' is required for cross-site cookies with 'secure: true'
+      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+      path: "/",
+    };
+
+    res.status(200)
+      .cookie("token", newToken, cookieOptions)
+      .json({
+        success: true,
+        message: "Token refreshed successfully.",
+        token: newToken,
+        // Pass the new access token expiry for frontend cookie management if needed
+        expiresIn: cookieExpireDays, 
+      });
+  } catch (error) {
+    console.error("Token Refresh Error:", error);
+    res.status(500).json({ success: false, message: "Server error during token refresh." });
+  }
 };

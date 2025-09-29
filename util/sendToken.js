@@ -2,34 +2,50 @@ import dotenv from "dotenv";
 dotenv.config({ quiet: true });
 
 export const sendToken = (user, statusCode, message, res) => {
-  try {
-    const token = user.getJWTToken();
-    const cookieExpireDays = parseInt(process.env.COOKIE_EXPIRE || "7", 10);
+  try {
+    // 1. Generate both tokens
+    const token = user.getJWTToken(); // Access Token
+    const refreshToken = user.getRefreshJWTToken(); // Refresh Token
 
-    const isProd = process.env.NODE_ENV === "production";
+    const isProd = process.env.NODE_ENV === "production";
 
-    const cookieOptions = {
-      expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
-      httpOnly: true,
-      secure: isProd,           // Only true in production
-      sameSite: isProd ? "None" : "Lax", // Lax for local dev
-      path: "/",
+    // Access Token Cookie Options (Shorter expiration)
+    const cookieExpireDays = parseInt(process.env.COOKIE_EXPIRE || "1", 10); // Typically shorter (e.g., 1 day)
+    const accessTokenOptions = {
+      expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
+      httpOnly: true,
+      secure: isProd,
+      // SameSite: 'None' is required for cross-site cookies with 'secure: true'
+      sameSite: isProd ? "None" : "Lax",
+      path: "/",
+    };
+
+    // Refresh Token Cookie Options (Longer expiration)
+    const refreshCookieExpireDays = parseInt(process.env.REFRESH_COOKIE_EXPIRE || "7", 10); // Typically longer (e.g., 7 days)
+    const refreshTokenOptions = {
+        expires: new Date(Date.now() + refreshCookieExpireDays * 24 * 60 * 60 * 1000),
+        httpOnly: true,
+        secure: isProd,
+        // SameSite: 'None' is required for cross-site cookies with 'secure: true'
+        sameSite: isProd ? "None" : "Lax",
+        path: "/api/auth", // Set path to only refresh token endpoint for security/clarity
     };
 
-    res
-      .status(statusCode)
-      .cookie("token", token, cookieOptions)
-      .json({
-        success: true,
-        message,
-        token, // optional: for header-based requests
-      });
-  } catch (error) {
-    console.error("Error in sendToken:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Token generation failed: " + error.message,
-    });
-  }
-};
 
+    res
+      .status(statusCode)
+      .cookie("token", token, accessTokenOptions) // Set Access Token
+      .cookie("refreshToken", refreshToken, refreshTokenOptions) // Set Refresh Token
+      .json({
+        success: true,
+        message,
+        token, // for interceptor (optional, but harmless)
+      });
+  } catch (error) {
+    console.error("Error in sendToken:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Token generation failed: " + error.message,
+    });
+  }
+};
