@@ -198,19 +198,18 @@ export const loginUser = async (req, res) => {
 export const logoutUser = async (req, res) => {
   try {
     const isProd = process.env.NODE_ENV === "production";
-    
-    // Optional: Revoke the refresh token by clearing the hash in the database
-    // This assumes req.user is available via auth middleware on the logout route
-    if (req.user && req.user._id) {
-        await User.findByIdAndUpdate(req.user._id, { refreshTokenHash: undefined }, { new: true, runValidators: false });
-    }
+    
+    // Optional: Revoke the refresh token by clearing the hash in the database
+    if (req.user && req.user._id) {
+        await User.findByIdAndUpdate(req.user._id, { refreshTokenHash: undefined }, { new: true, runValidators: false });
+    }
     
     // Base options for cookie clearing
     const expiredOptions = {
         expires: new Date(0),
         httpOnly: true,
-        secure: isProd,
-        // CRITICAL: Must use SameSite: None and Secure: true for cross-domain in production
+        // Ensure secure and sameSite are set for clearing in production
+        secure: isProd, 
         sameSite: isProd ? "None" : "Lax",
         path: "/", // Path used for the 'token' cookie
     };
@@ -218,7 +217,7 @@ export const logoutUser = async (req, res) => {
     // Refresh token path must match the setting path
     const refreshTokenExpiredOptions = {
         ...expiredOptions,
-        path: "/api/auth", // Assumed path used to set refreshToken for security
+        path: "/api/auth", // Must match the original path set in sendToken
     };
 
     res.status(200)
@@ -362,10 +361,7 @@ export const getMe = async (req, res) => {
 export const refreshToken = async (req, res) => {
   try {
     const user = req.user; // Populated by isRefreshTokenAuthenticated middleware
-    
-    // NOTE: isRefreshTokenAuthenticated middleware should handle the check using 
-    // user.checkRefreshTokenHash(req.cookies.refreshToken) 
-    
+    
     // Generate a new JWT access token
     const newToken = user.getJWTToken();
     
@@ -376,8 +372,8 @@ export const refreshToken = async (req, res) => {
     const cookieOptions = {
       expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
       httpOnly: true,
+      // Ensure secure and sameSite are set for the new token in production
       secure: process.env.NODE_ENV === "production",
-      // SameSite: 'None' is required for cross-site cookies with 'secure: true'
       sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
       path: "/",
     };

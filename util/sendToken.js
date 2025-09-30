@@ -7,9 +7,9 @@ export const sendToken = async (user, statusCode, message, res) => {
     const token = user.getJWTToken(); // Access Token
     const refreshToken = user.getRefreshJWTToken(); // Refresh Token
 
-    // Save the user to persist the new refreshTokenHash
-    // NOTE: This must be called after getRefreshJWTToken()
-    await user.save({ validateBeforeSave: false });
+    // Save the user to persist the new refreshTokenHash
+    // NOTE: This must be called after getRefreshJWTToken()
+    await user.save({ validateBeforeSave: false });
 
     const isProd = process.env.NODE_ENV === "production";
 
@@ -18,9 +18,10 @@ export const sendToken = async (user, statusCode, message, res) => {
     const accessTokenOptions = {
       expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
       httpOnly: true,
-      secure: isProd,
-      // SameSite: 'None' is required for cross-site cookies with 'secure: true'
-      sameSite: isProd ? "None" : "Lax",
+      // CRITICAL: Set secure to true in production as your app is on HTTPS (Netlify)
+      secure: isProd, 
+      // CRITICAL: Set SameSite to None in production for cross-site requests
+      sameSite: isProd ? "None" : "Lax", 
       path: "/",
     };
 
@@ -29,8 +30,9 @@ export const sendToken = async (user, statusCode, message, res) => {
     const refreshTokenOptions = {
         expires: new Date(Date.now() + refreshCookieExpireDays * 24 * 60 * 60 * 1000),
         httpOnly: true,
+        // CRITICAL: Set secure to true in production
         secure: isProd,
-        // SameSite: 'None' is required for cross-site cookies with 'secure: true'
+        // CRITICAL: Set SameSite to None in production
         sameSite: isProd ? "None" : "Lax",
         path: "/api/auth", // Set path to only refresh token endpoint for security/clarity
     };
