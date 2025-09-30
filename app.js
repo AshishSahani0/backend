@@ -29,9 +29,7 @@ const server = http.createServer(app);
 
 // ------------------- DATABASE -------------------
 connectDB();
-app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
 // ------------------- MIDDLEWARE -------------------
 
 // Allow all origins
