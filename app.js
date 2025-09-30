@@ -17,11 +17,10 @@ import anonymousChatRouter from "./routes/anonymousChatRouter.js";
 import journalRouter from "./routes/journalRoutes.js";
 import emergencyRouter from "./routes/emergencyRoutes.js";
 
-// Socket handlers (separated)
+// Socket handlers
 import { setupBookedSessionSocket } from "./socket/bookedSessionSocket.js";
 import { setupAnonymousSessionSocket } from "./socket/anonymousSessionSocket.js";
 
-// Load environment variables
 dotenv.config({ quiet: true });
 
 const app = express();
@@ -32,18 +31,21 @@ connectDB();
 
 // ------------------- MIDDLEWARE -------------------
 
-// Allow all origins
+// CORS must come before cookieParser & JSON parsing
 app.use(cors({
-  origin: ["https://neural-knights-133-saarthi.vercel.app"], // frontend
-  credentials: true, // very important
-  methods: ["GET","POST","PUT","DELETE","PATCH"],
+  origin: "https://saarthi01.netlify.app", // your Netlify frontend
+  credentials: true,                         // allow cookies
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
 }));
 
+app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // ------------------- SOCKET.IO -------------------
 const io = new Server(server, {
   cors: {
-    origin:["https://neural-knights-133-saarthi.vercel.app"],
+    origin: "https://saarthi01.netlify.app",
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   },
@@ -53,11 +55,7 @@ const io = new Server(server, {
 setupBookedSessionSocket(io);
 setupAnonymousSessionSocket(io);
 
-app.set("io", io); 
-
-app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.set("io", io);
 
 // ------------------- API ROUTES -------------------
 app.use("/api/auth", authRouter);
@@ -69,10 +67,6 @@ app.use("/api/admin", adminRouter);
 app.use("/api/anonymous-chat", anonymousChatRouter);
 app.use("/api/journal", journalRouter);
 app.use("/api/emergency", emergencyRouter);
-
-
-
-
 
 // ------------------- HEALTH CHECK -------------------
 app.get("/", (req, res) => {
@@ -88,5 +82,4 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ------------------- EXPORT -------------------
 export { app, server };
