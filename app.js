@@ -34,7 +34,7 @@ connectDB();
 
 // Allow all origins
 app.use(cors({
-  origin: ["https://neural-knights-133-saarthi.vercel.app"], // frontend
+  origin: ["https://saarthi01.netlify.app"], // frontend
   credentials: true, // very important
   methods: ["GET","POST","PUT","DELETE","PATCH"],
 }));
@@ -43,7 +43,7 @@ app.use(cors({
 // ------------------- SOCKET.IO -------------------
 const io = new Server(server, {
   cors: {
-    origin:["https://neural-knights-133-saarthi.vercel.app"],
+    origin:["https://saarthi01.netlify.app"],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   },
