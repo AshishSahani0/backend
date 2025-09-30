@@ -5,8 +5,8 @@ dotenv.config({ quiet: true });
 
 
 /**
- * Middleware to check if the user is authenticated (using Access Token)
- */
+ * Middleware to check if the user is authenticated (using Access Token)
+ */
 export const isAuthenticated = async (req, res, next) => {
   try {
     // ✅ 1. Try getting token from httpOnly cookie first (preferred and safer)
@@ -28,10 +28,11 @@ export const isAuthenticated = async (req, res, next) => {
     // ✅ 4. Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // 5. Fetch user data
+    // 5. Fetch user data
     req.user = await User.findById(decoded.id).select("-password");
 
-    if (!req.user) {
+    if (!req.user || !req.user.isActive) {
+      // Check for isActive to cover the "account deactivated" case
       return res.status(401).json({
         success: false,
         message: "User not found or account deactivated.",
@@ -41,21 +42,21 @@ export const isAuthenticated = async (req, res, next) => {
     next();
   } catch (err) {
     console.error("isAuthenticated error:", err.message);
-    
-    // Explicitly return 401 when token is expired/invalid, prompting refresh logic on client
+    
+    // Explicitly return 401 when token is expired/invalid, prompting refresh logic on client
     return res.status(401).json({
       success: false,
       message: "Invalid or expired access token.",
-      // Optional: Add a code to distinguish from 'Not logged in' if needed for client logic
-      errorCode: "TOKEN_EXPIRED",
+      // Added errorCode for clearer client logic handling
+      errorCode: "TOKEN_EXPIRED", 
     });
   }
 };
 
 
 /**
- * Middleware to check if the authenticated user has the required role(s).
- */
+ * Middleware to check if the authenticated user has the required role(s).
+ */
 export const isAuthorized = (...roles) => {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
@@ -84,8 +85,11 @@ export const isCollegePsychologist = (req, res, next) => {
 
 
 /**
- * Middleware to authenticate using the Refresh Token (used only for the /refresh-token route)
- */
+ * Middleware to authenticate using the Refresh Token (used only for the /refresh-token route)
+ * 1. Verifies token signature.
+ * 2. Checks if the user exists and is active.
+ * 3. Crucially, checks the token against the stored hash for revocation.
+ */
 export const isRefreshTokenAuthenticated = async (req, res, next) => {
   try {
     const refreshToken = req.cookies?.refreshToken;
@@ -93,17 +97,27 @@ export const isRefreshTokenAuthenticated = async (req, res, next) => {
       return res.status(401).json({ success: false, message: "No refresh token provided." });
     }
 
+    // 1. Verify token signature
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-    const user = await User.findById(decoded.id);
+    
+    // 2. Find user (must include refreshTokenHash and isActive for security checks)
+    const user = await User.findById(decoded.id).select("+refreshTokenHash +isActive"); 
 
     if (!user || !user.isActive) {
       return res.status(401).json({ success: false, message: "Invalid refresh token or user is inactive." });
     }
 
+    // 3. Check for token revocation (against the stored hash)
+    // This is the CRUCIAL added step for refresh token security
+    if (!user.checkRefreshTokenHash(refreshToken)) {
+        return res.status(401).json({ success: false, message: "Refresh token has been revoked. Please log in again." });
+    }
+
     req.user = user;
     next();
   } catch (error) {
-    // If refresh token fails, force user to log in again
+    console.error("isRefreshTokenAuthenticated error:", error.message);
+    // If refresh token fails (expired/invalid signature), force user to log in again
     res.status(401).json({ success: false, message: "Invalid or expired refresh token. Please log in again." });
   }
 };
