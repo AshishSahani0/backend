@@ -1,11 +1,15 @@
 import dotenv from "dotenv";
 dotenv.config({ quiet: true });
 
-export const sendToken = (user, statusCode, message, res) => {
+export const sendToken = async (user, statusCode, message, res) => {
   try {
-    // 1. Generate both tokens
+    // 1. Generate both tokens. getRefreshJWTToken also sets user.refreshTokenHash.
     const token = user.getJWTToken(); // Access Token
     const refreshToken = user.getRefreshJWTToken(); // Refresh Token
+
+    // Save the user to persist the new refreshTokenHash
+    // NOTE: This must be called after getRefreshJWTToken()
+    await user.save({ validateBeforeSave: false });
 
     const isProd = process.env.NODE_ENV === "production";
 
@@ -20,16 +24,16 @@ export const sendToken = (user, statusCode, message, res) => {
       path: "/",
     };
 
-    // Refresh Token Cookie Options (Longer expiration)
-    const refreshCookieExpireDays = parseInt(process.env.REFRESH_COOKIE_EXPIRE || "7", 10); // Typically longer (e.g., 7 days)
-    const refreshTokenOptions = {
-        expires: new Date(Date.now() + refreshCookieExpireDays * 24 * 60 * 60 * 1000),
-        httpOnly: true,
-        secure: isProd,
-        // SameSite: 'None' is required for cross-site cookies with 'secure: true'
-        sameSite: isProd ? "None" : "Lax",
-        path: "/api/auth", // Set path to only refresh token endpoint for security/clarity
-    };
+    // Refresh Token Cookie Options (Longer expiration)
+    const refreshCookieExpireDays = parseInt(process.env.REFRESH_COOKIE_EXPIRE || "7", 10); // Typically longer (e.g., 7 days)
+    const refreshTokenOptions = {
+        expires: new Date(Date.now() + refreshCookieExpireDays * 24 * 60 * 60 * 1000),
+        httpOnly: true,
+        secure: isProd,
+        // SameSite: 'None' is required for cross-site cookies with 'secure: true'
+        sameSite: isProd ? "None" : "Lax",
+        path: "/api/auth", // Set path to only refresh token endpoint for security/clarity
+    };
 
 
     res

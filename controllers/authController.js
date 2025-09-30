@@ -12,78 +12,78 @@ import {
 
 // -------------------- REGISTER USER --------------------
 export const registerUser = async (req, res) => {
-  try {
-    let { username, email, password } = req.body;
+  try {
+    let { username, email, password } = req.body;
 
-    if (!username || !email || !password) {
-      return res.status(400).json({ success: false, message: "All fields are required." });
-    }
+    if (!username || !email || !password) {
+      return res.status(400).json({ success: false, message: "All fields are required." });
+    }
 
-    username = username.trim();
-    email = email.toLowerCase().trim();
+    username = username.trim();
+    email = email.toLowerCase().trim();
 
-    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,16}$/;
-    if (!strongPasswordRegex.test(password)) {
-      return res.status(400).json({
-        success: false,
-        message: "Password must be 8-16 characters and include uppercase, lowercase, number, and special character.",
-      });
-    }
+    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,16}$/;
+    if (!strongPasswordRegex.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be 8-16 characters and include uppercase, lowercase, number, and special character.",
+      });
+    }
 
-    const existingVerifiedUser = await User.findOne({ email, accountVerified: true });
-    if (existingVerifiedUser) {
-      return res.status(409).json({
-        success: false,
-        message: "This email is already registered and verified.",
-      });
-    }
+    const existingVerifiedUser = await User.findOne({ email, accountVerified: true });
+    if (existingVerifiedUser) {
+      return res.status(409).json({
+        success: false,
+        message: "This email is already registered and verified.",
+      });
+    }
 
-    const emailDomain = "@" + email.split("@")[1];
-    const institution = await Institution.findOne({ emailDomain });
-    if (!institution) {
-      return res.status(400).json({
-        success: false,
-        message: "Your email domain does not belong to a registered institution.",
-      });
-    }
+    const emailDomain = "@" + email.split("@")[1];
+    const institution = await Institution.findOne({ emailDomain });
+    if (!institution) {
+      return res.status(400).json({
+        success: false,
+        message: "Your email domain does not belong to a registered institution.",
+      });
+    }
 
-    await User.deleteMany({ email, accountVerified: false });
+    await User.deleteMany({ email, accountVerified: false });
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    // NOTE: Hashing will happen via the pre('save') hook in userSchema.js
+    const user = await User.create({
+      username,
+      email,
+      password, // Pass the raw password, schema hook will hash it
+      role: "Student",
+      institution: institution._id,
+      passwordUpdated: true, 
+      accountVerified: false,
+    });
 
-    const user = await User.create({
-      username,
-      email,
-      password: hashedPassword,
-      role: "Student",
-      institution: institution._id,
-      passwordUpdated: true, // Since user is setting it for the first time
-      accountVerified: false,
-    });
+    const verificationCode = user.generateVerificationCode();
+    // Save user with code (validation skipped since we just created it)
+    await user.save({ validateBeforeSave: false }); 
 
-    const verificationCode = user.generateVerificationCode();
-    await user.save({ validateBeforeSave: false });
+    try {
+      await sendVerificationCode(verificationCode, user.email);
+    } catch (emailErr) {
+      console.error("❌ OTP Email Error:", emailErr.message);
+      // Don't block registration, but log the error. User can use "resend OTP".
+    }
 
-    try {
-      await sendVerificationCode(verificationCode, user.email);
-    } catch (emailErr) {
-      console.error("❌ OTP Email Error:", emailErr.message);
-      // Don't block registration, but log the error. User can use "resend OTP".
-    }
-
-    return res.status(201).json({
-      success: true,
-      message: "Registration successful. An OTP has been sent to your email for verification.",
-      otpRequired: true,
-      user: { email: user.email },
-    });
-  } catch (error) {
-    console.error("❌ Registration error:", error);
-    if (error.code === 11000) {
-      return res.status(409).json({ success: false, message: "An account with this email already exists for this institution." });
-    }
-    return res.status(500).json({ success: false, message: "Server error during registration." });
-  }
+    return res.status(201).json({
+      success: true,
+      message: "Registration successful. An OTP has been sent to your email for verification.",
+      otpRequired: true,
+      user: { email: user.email },
+    });
+  } catch (error) {
+    console.error("❌ Registration error:", error);
+    if (error.code === 11000) {
+      return res.status(409).json({ success: false, message: "An account with this email already exists for this institution." });
+    }
+    return res.status(500).json({ success: false, message: "Server error during registration." });
+  }
 };
 
 // -------------------- VERIFY OTP --------------------
@@ -153,7 +153,6 @@ export const resendOTP = async (req, res) => {
   }
 };
 
-
 // -------------------- LOGIN USER --------------------
 export const loginUser = async (req, res) => {
   try {
@@ -162,6 +161,7 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "Email and password are required." });
     }
 
+    // Select password explicitly
     const user = await User.findOne({ email: email.toLowerCase().trim() }).select("+password");
     if (!user) {
       return res.status(401).json({ success: false, message: "Invalid email or password." });
@@ -173,12 +173,21 @@ export const loginUser = async (req, res) => {
       return res.status(403).json({ success: false, message: "Your account has been deactivated." });
     }
 
-    const isPasswordMatch = await bcrypt.compare(password, user.password);
+    // Use the new method from the schema
+    const isPasswordMatch = await user.comparePassword(password);
     if (!isPasswordMatch) {
       return res.status(401).json({ success: false, message: "Invalid email or password." });
     }
-    // sendToken (in util/sendToken.js) must be updated to set both 'token' and 'refreshToken'
-    sendToken(user, 200, "Login successful", res);
+    
+    // Generate both tokens, which will also hash and store the refresh token hash
+    // sendToken handles the refresh token generation which updates user.refreshTokenHash
+    sendToken(user, 200, "Login successful", res);
+    
+    // The user object sent to sendToken has the updated refreshTokenHash, 
+    // but the actual saving logic is handled inside the sendToken utility 
+    // to keep the controller cleaner, or it should be done here:
+    // await user.save({ validateBeforeSave: false }); // <-- If you want to save the hash right here
+
   } catch (error) {
     console.error("Login Error:", error);
     res.status(500).json({ success: false, message: "Server error during login." });
@@ -186,25 +195,31 @@ export const loginUser = async (req, res) => {
 };
 
 // -------------------- LOGOUT USER --------------------
-export const logoutUser = (req, res) => {
+export const logoutUser = async (req, res) => {
   try {
-    const isProd = process.env.NODE_ENV === "production";
+    const isProd = process.env.NODE_ENV === "production";
     
-    // Base options for cookie clearing
-    const expiredOptions = {
-        expires: new Date(0),
-        httpOnly: true,
-        secure: isProd,
-        // CRITICAL: Must use SameSite: None and Secure: true for cross-domain in production
-        sameSite: isProd ? "None" : "Lax",
-        path: "/", // Path used for the 'token' cookie
-    };
-    
-    // Refresh token path must match the setting path
-    const refreshTokenExpiredOptions = {
-        ...expiredOptions,
-        path: "/api/auth", // Assumed path used to set refreshToken for security
-    };
+    // Optional: Revoke the refresh token by clearing the hash in the database
+    // This assumes req.user is available via auth middleware on the logout route
+    if (req.user && req.user._id) {
+        await User.findByIdAndUpdate(req.user._id, { refreshTokenHash: undefined }, { new: true, runValidators: false });
+    }
+    
+    // Base options for cookie clearing
+    const expiredOptions = {
+        expires: new Date(0),
+        httpOnly: true,
+        secure: isProd,
+        // CRITICAL: Must use SameSite: None and Secure: true for cross-domain in production
+        sameSite: isProd ? "None" : "Lax",
+        path: "/", // Path used for the 'token' cookie
+    };
+    
+    // Refresh token path must match the setting path
+    const refreshTokenExpiredOptions = {
+        ...expiredOptions,
+        path: "/api/auth", // Assumed path used to set refreshToken for security
+    };
 
     res.status(200)
       .cookie("token", "", expiredOptions) // Clear Access Token
@@ -215,122 +230,131 @@ export const logoutUser = (req, res) => {
     res.status(500).json({ success: false, message: "Logout failed." });
   }
 };
+
+
 // -------------------- FORGOT PASSWORD --------------------
 export const forgotPassword = async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, message: "Email is required." });
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: "Email is required." });
 
-    const user = await User.findOne({ email: email.toLowerCase().trim(), accountVerified: true });
-    if (!user) return res.status(404).json({ success: false, message: "No verified user found with this email." });
+    const user = await User.findOne({ email: email.toLowerCase().trim(), accountVerified: true });
+    if (!user) return res.status(404).json({ success: false, message: "No verified user found with this email." });
 
-    const resetToken = user.getResetPasswordToken();
-    await user.save({ validateBeforeSave: false });
+    const resetToken = user.getResetPasswordToken();
+    // Save user with token
+    await user.save({ validateBeforeSave: false }); 
 
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-    const html = generateForgotPasswordEmailTemplate(resetUrl);
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    const html = generateForgotPasswordEmailTemplate(resetUrl);
 
-    await sendEmail({ to: user.email, subject: "🔐 SAARTHI Password Reset Request", html });
+    await sendEmail({ to: user.email, subject: "🔐 SAARTHI Password Reset Request", html });
 
-    res.status(200).json({ success: true, message: `Password reset link sent to ${user.email}.` });
-  } catch (error) {
-    console.error("Forgot Password Error:", error);
-    // Clear tokens on error to allow user to try again
-    await User.findOneAndUpdate({ "email": req.body.email }, { resetPasswordToken: undefined, resetPasswordExpire: undefined });
-    res.status(500).json({ success: false, message: "Could not send reset email. Please try again." });
-  }
+    res.status(200).json({ success: true, message: `Password reset link sent to ${user.email}.` });
+  } catch (error) {
+    console.error("Forgot Password Error:", error);
+    // Clear tokens on error to allow user to try again
+    await User.findOneAndUpdate({ "email": req.body.email }, { resetPasswordToken: undefined, resetPasswordExpire: undefined });
+    res.status(500).json({ success: false, message: "Could not send reset email. Please try again." });
+  }
 };
 
 // -------------------- RESET PASSWORD --------------------
 export const resetPassword = async (req, res) => {
-  try {
-    const { token } = req.params;
-    const { password, confirmPassword } = req.body;
+  try {
+    const { token } = req.params;
+    const { password, confirmPassword } = req.body;
 
-    if (!password || !confirmPassword || password !== confirmPassword) {
-      return res.status(400).json({ success: false, message: "Passwords do not match." });
-    }
-    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,16}$/;
-    if (!strongPasswordRegex.test(password)) {
-      return res.status(400).json({
-        success: false,
-        message: "Password must be 8-16 characters and include uppercase, lowercase, number, and special character.",
-      });
-    }
+    if (!password || !confirmPassword || password !== confirmPassword) {
+      return res.status(400).json({ success: false, message: "Passwords do not match." });
+    }
+    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,16}$/;
+    if (!strongPasswordRegex.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be 8-16 characters and include uppercase, lowercase, number, and special character.",
+      });
+    }
 
-    const resetPasswordToken = crypto.createHash("sha256").update(token).digest("hex");
-    const user = await User.findOne({ resetPasswordToken, resetPasswordExpire: { $gt: Date.now() } }).select("+password");
-    if (!user) return res.status(400).json({ success: false, message: "Reset token is invalid or has expired." });
+    const resetPasswordToken = crypto.createHash("sha256").update(token).digest("hex");
+    const user = await User.findOne({ resetPasswordToken, resetPasswordExpire: { $gt: Date.now() } }).select("+password");
+    if (!user) return res.status(400).json({ success: false, message: "Reset token is invalid or has expired." });
 
-    const isSamePassword = await bcrypt.compare(password, user.password);
-    if (isSamePassword) return res.status(400).json({ success: false, message: "New password cannot be the same as the old one." });
+    // Use schema method for comparison
+    const isSamePassword = await user.comparePassword(password);
+    if (isSamePassword) return res.status(400).json({ success: false, message: "New password cannot be the same as the old one." });
 
-    user.password = await bcrypt.hash(password, 12);
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-    user.passwordUpdated = true;
-    await user.save();
-
-    sendToken(user, 200, "Password reset successfully", res);
-  } catch (error) {
-    console.error("Reset Password Error:", error);
-    res.status(500).json({ success: false, message: "Server error. Please try again." });
-  }
+    // Set raw password, pre-save hook will hash and set passwordUpdated
+    user.password = password; 
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    
+    // Save user and generate/set tokens
+    sendToken(user, 200, "Password reset successfully", res);
+    
+    // NOTE: If sendToken only generates the hash, you must save here
+    await user.save(); 
+  } catch (error) {
+    console.error("Reset Password Error:", error);
+    res.status(500).json({ success: false, message: "Server error. Please try again." });
+  }
 };
 
 // -------------------- UPDATE PASSWORD --------------------
 export const updatePassword = async (req, res) => {
-  try {
-    const { currentPassword, newPassword, confirmNewPassword } = req.body;
-    if (!currentPassword || !newPassword || !confirmNewPassword) {
-      return res.status(400).json({ success: false, message: "All password fields are required." });
-    }
-    if (newPassword !== confirmNewPassword) {
-      return res.status(400).json({ success: false, message: "New passwords do not match." });
-    }
+  try {
+    const { currentPassword, newPassword, confirmNewPassword } = req.body;
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({ success: false, message: "All password fields are required." });
+    }
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({ success: false, message: "New passwords do not match." });
+    }
 
-    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,16}$/;
-    if (!strongPasswordRegex.test(newPassword)) {
-      return res.status(400).json({
-        success: false,
-        message: "Password must be 8-16 characters and include uppercase, lowercase, number, and special character.",
-      });
-    }
+    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,16}$/;
+    if (!strongPasswordRegex.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be 8-16 characters and include uppercase, lowercase, number, and special character.",
+      });
+    }
 
-    const user = await User.findById(req.user._id).select("+password");
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) return res.status(400).json({ success: false, message: "Current password is incorrect." });
-    
-    user.password = await bcrypt.hash(newPassword, 12);
-    user.passwordUpdated = true;
-    await user.save();
-    
-    res.status(200).json({ success: true, message: "Password updated successfully." });
-  } catch (error) {
-    console.error("Update Password Error:", error);
-    res.status(500).json({ success: false, message: "Server error. Please try again." });
-  }
+    const user = await User.findById(req.user._id).select("+password");
+    
+    // Use schema method for comparison
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) return res.status(400).json({ success: false, message: "Current password is incorrect." });
+    
+    // Set raw password, pre-save hook will hash and set passwordUpdated
+    user.password = newPassword; 
+    await user.save();
+    
+    res.status(200).json({ success: true, message: "Password updated successfully." });
+  } catch (error) {
+    console.error("Update Password Error:", error);
+    res.status(500).json({ success: false, message: "Server error. Please try again." });
+  }
 };
 
 // -------------------- GET ME --------------------
 export const getMe = async (req, res) => {
-  try {
-    const user = req.user;
-    res.status(200).json({
-      success: true,
-      user: {
-        _id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        passwordUpdated: user.passwordUpdated,
-        profileImage: user.profileImage,
-        institution: user.institution,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: "Failed to fetch user data." });
-  }
+  try {
+    const user = req.user;
+    res.status(200).json({
+      success: true,
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        passwordUpdated: user.passwordUpdated,
+        profileImage: user.profileImage,
+        institution: user.institution,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Failed to fetch user data." });
+  }
 };
 
 
@@ -338,7 +362,10 @@ export const getMe = async (req, res) => {
 export const refreshToken = async (req, res) => {
   try {
     const user = req.user; // Populated by isRefreshTokenAuthenticated middleware
-    
+    
+    // NOTE: isRefreshTokenAuthenticated middleware should handle the check using 
+    // user.checkRefreshTokenHash(req.cookies.refreshToken) 
+    
     // Generate a new JWT access token
     const newToken = user.getJWTToken();
     
@@ -361,7 +388,7 @@ export const refreshToken = async (req, res) => {
         success: true,
         message: "Token refreshed successfully.",
         token: newToken,
-        // Pass the new access token expiry for frontend cookie management if needed
+        // Pass the new access token expiry for frontend cookie management if needed
         expiresIn: cookieExpireDays, 
       });
   } catch (error) {
