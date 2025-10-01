@@ -221,8 +221,8 @@ export const logoutUser = async (req, res) => {
     };
 
     res.status(200)
-      .cookie("token", "", expiredOptions) // Clear Access Token
-      .cookie("refreshToken", "", refreshTokenExpiredOptions) // Clear Refresh Token
+      .cookie("token", "loggedout", expiredOptions) // Clear Access Token
+      .cookie("refreshToken", "loggedout", refreshTokenExpiredOptions) // Clear Refresh Token
       .json({ success: true, message: "Logged out successfully" });
   } catch (error) {
     console.error("Logout Error:", error);
