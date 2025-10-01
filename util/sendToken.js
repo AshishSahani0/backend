@@ -12,6 +12,8 @@ export const sendToken = async (user, statusCode, message, res) => {
     await user.save({ validateBeforeSave: false });
 
     const isProd = process.env.NODE_ENV === "production";
+    const cookieSecure = isProd;
+    const cookieSameSite = isProd ? "None" : "Lax";
 
     // Access Token Cookie Options (Shorter expiration)
     const cookieExpireDays = parseInt(process.env.COOKIE_EXPIRE || "1", 10); // Typically shorter (e.g., 1 day)
@@ -19,9 +21,9 @@ export const sendToken = async (user, statusCode, message, res) => {
       expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
       httpOnly: true,
       // CRITICAL: Set secure to true in production as your app is on HTTPS (Netlify)
-      secure: isProd, 
+      secure: cookieSecure, 
       // CRITICAL: Set SameSite to None in production for cross-site requests
-      sameSite: isProd ? "None" : "Lax", 
+      sameSite: cookieSameSite, 
       path: "/",
     };
 
@@ -31,9 +33,9 @@ export const sendToken = async (user, statusCode, message, res) => {
         expires: new Date(Date.now() + refreshCookieExpireDays * 24 * 60 * 60 * 1000),
         httpOnly: true,
         // CRITICAL: Set secure to true in production
-        secure: isProd,
+        secure: cookieSecure,
         // CRITICAL: Set SameSite to None in production
-        sameSite: isProd ? "None" : "Lax",
+        sameSite: cookieSameSite,
         path: "/api/auth", // Set path to only refresh token endpoint for security/clarity
     };
 

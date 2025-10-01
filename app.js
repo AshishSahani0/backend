@@ -34,8 +34,8 @@ connectDB();
 // CORS must come before cookieParser & JSON parsing
 app.use(cors({
   origin: "https://saarthi01.netlify.app", // your Netlify frontend
-  credentials: true,                         // allow cookies
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  credentials: true,                         // allow cookies
 }));
 
 app.use(cookieParser());
