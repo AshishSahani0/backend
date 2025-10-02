@@ -30,12 +30,26 @@ const server = http.createServer(app);
 connectDB();
 
 // ------------------- MIDDLEWARE -------------------
+const ALLOWED_ORIGINS = [
+    "https://saarthi01.netlify.app", // Your deployed production URL
+    "http://localhost:5173",          // Your local development URL
+];
 
-// CORS must come before cookieParser & JSON parsing
 app.use(cors({
-  origin: "https://saarthi01.netlify.app", // your Netlify frontend
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-  credentials: true,                         // allow cookies
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, curl, or same-origin)
+        if (!origin) return callback(null, true); 
+
+        // Check if the origin is in our allowed list
+        if (ALLOWED_ORIGINS.includes(origin) || origin === process.env.FRONTEND_URL) {
+            callback(null, true);
+        } else {
+            console.log(`❌ CORS Blocked: Origin ${origin} not allowed`);
+            callback(new Error('Not allowed by CORS'), false);
+        }
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true, // allow cookies
 }));
 
 app.use(cookieParser());
@@ -45,7 +59,7 @@ app.use(express.urlencoded({ extended: true }));
 // ------------------- SOCKET.IO -------------------
 const io = new Server(server, {
   cors: {
-    origin: "https://saarthi01.netlify.app",
+    origin: ALLOWED_ORIGINS,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   },
