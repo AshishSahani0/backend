@@ -22,7 +22,7 @@ export const sendToken = async (user, statusCode, message, res) => {
         // Access Token Cookie Options (Shorter expiration)
         const cookieExpireDays = parseInt(process.env.COOKIE_EXPIRE || "1", 10);
         const accessTokenOptions = {
-            expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
+            //expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
             httpOnly: false, // <-- Change to FALSE, as you are reading this on the client (via js-cookie)
             secure: cookieSecure, 
             sameSite: accessTokenSameSite, // <-- NOW LAX
