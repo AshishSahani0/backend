@@ -44,7 +44,7 @@ export const sendEmergencyAlert = async (req, res) => {
       <p>Please respond to this alert with the highest priority.</p>
     `;
 
-    await sendEmail({
+    sendEmail({
       to: recipientEmails,
       subject,
       html: emailBody,

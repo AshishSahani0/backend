@@ -76,7 +76,7 @@ export const registerInstitute = async (req, res) => {
       password,
     });
 
-    await sendEmail({
+    sendEmail({
       to: contactEmail,
       subject: "Your SAARTHI Institute Admin Account is Ready",
       html,
@@ -152,7 +152,7 @@ export const registerPsychologist = async (req, res) => {
     email,
     password,
   });
-  await sendEmail({
+  sendEmail({
     to: email,
     subject: "Your SAARTHI Psychologist Account is Ready",
     html,

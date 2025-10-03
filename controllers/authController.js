@@ -64,12 +64,9 @@ export const registerUser = async (req, res) => {
     // Save user with code (validation skipped since we just created it)
     await user.save({ validateBeforeSave: false }); 
 
-    try {
-      await sendVerificationCode(verificationCode, user.email);
-    } catch (emailErr) {
-      console.error("❌ OTP Email Error:", emailErr.message);
-      // Don't block registration, but log the error. User can use "resend OTP".
-    }
+   
+    sendVerificationCode(verificationCode, user.email);
+    
 
     return res.status(201).json({
       success: true,
@@ -114,7 +111,7 @@ export const verifyOTP = async (req, res) => {
     await user.save();
 
     const html = generateVerificationSuccessEmailTemplate(user.username);
-    await sendEmail({ to: user.email, subject: "🎉 Your SAARTHI Account is Verified!", html });
+    sendEmail({ to: user.email, subject: "🎉 Your SAARTHI Account is Verified!", html });
 
     res.status(200).json({
       success: true,
@@ -141,7 +138,7 @@ export const resendOTP = async (req, res) => {
     const verificationCode = user.generateVerificationCode();
     await user.save({ validateBeforeSave: false });
 
-    await sendVerificationCode(verificationCode, user.email);
+    sendVerificationCode(verificationCode, user.email);
 
     res.status(200).json({
       success: true,
@@ -247,7 +244,7 @@ export const forgotPassword = async (req, res) => {
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
     const html = generateForgotPasswordEmailTemplate(resetUrl);
 
-    await sendEmail({ to: user.email, subject: "🔐 SAARTHI Password Reset Request", html });
+    sendEmail({ to: user.email, subject: "🔐 SAARTHI Password Reset Request", html });
 
     res.status(200).json({ success: true, message: `Password reset link sent to ${user.email}.` });
   } catch (error) {

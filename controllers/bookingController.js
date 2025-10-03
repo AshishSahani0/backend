@@ -80,23 +80,21 @@ export const bookAppointment = async (req, res) => {
     }
 
     // Email notifications
-    (async () => {
-      try {
-        await sendEmail({
+    
+      
+         sendEmail({
           to: psychologist.email,
           subject: "New Appointment Request",
           html: `<p>New appointment from ${anonymous ? "Anonymous" : student.username} on ${date} at ${timeSlot}</p>`,
         });
 
-        await sendEmail({
+        sendEmail({
           to: student.email,
           subject: "Appointment Booked",
           html: `<p>Your appointment with ${psychologist.username} is scheduled for ${date} at ${timeSlot}</p>`,
         });
-      } catch (err) {
-        console.error("Email send failed:", err);
-      }
-    })();
+      
+    
 
     res.status(201).json({
       success: true,
@@ -198,7 +196,7 @@ export const updateBookingStatus = async (req, res) => {
     const student = await User.findById(booking.student);
     const psychologist = await User.findById(booking.psychologist);
 
-    await sendEmail({
+    sendEmail({
       to: student.email,
       subject: `Booking ${status}`,
       html: `<p>Your appointment with ${psychologist.username} has been ${status}</p>`,
@@ -317,7 +315,7 @@ export const rescheduleBooking = async (req, res) => {
             <p>Thank you.</p>
         `;
 
-        await sendEmail({
+        sendEmail({
             to: student.email,
             subject: emailSubject,
             html: emailBody,
@@ -401,7 +399,7 @@ export const notifyStudent = async (req, res) => {
       <p>Best regards,<br>The SAARTHI Team</p>
     `;
 
-    await sendEmail({ to: studentEmail, subject, html });
+    sendEmail({ to: studentEmail, subject, html });
 
     res.status(200).json({ success: true, message: "Notification sent to student successfully." });
   } catch (error) {
