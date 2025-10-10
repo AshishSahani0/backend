@@ -1,5 +1,3 @@
-// server side
-
 import Message from "../models/messageSchema.js";
 import User from "../models/userSchema.js";
 import mongoose from "mongoose";
@@ -14,32 +12,25 @@ export const setupBookedSessionSocket = (io) => {
     onlineBookedUsers++;
     bookedNamespace.emit("updateOnlineUsers", { count: onlineBookedUsers });
 
-    // Identify user and map
     socket.on("identify", ({ userId, role }) => {
       if (userId) {
         socket.userId = userId;
         bookedUserSocketMap.set(userId, socket.id);
-        console.log(`User identified: ${userId} → ${socket.id}`);
+        console.log(`✅ User identified: ${userId} → ${socket.id}`);
+      } else {
+        console.warn("❌ identify event missing userId");
       }
-      if (role === "CollegePsychologist") {
-        socket.join("psychologists");
+      if (role === "CollegePsychologist") socket.join("psychologists");
+    });
+
+    socket.on("joinRoom", ({ roomId }) => {
+      if (roomId) {
+        socket.join(roomId);
+        console.log(`🔗 User ${socket.userId} joined room ${roomId}`);
       }
     });
 
-    // Join chat room
-    socket.on("joinRoom", ({ roomId, user, bookingId }) => {
-      socket.join(roomId);
-    });
-
-    // Typing events
-    socket.on("typing", ({ roomId, user }) => {
-      socket.to(roomId).emit("userTyping", { userId: user._id });
-    });
-    socket.on("stopTyping", ({ roomId, userId }) => {
-      socket.to(roomId).emit("userStopTyping", { userId });
-    });
-
-    // Chat messages
+    // ===== Chat =====
     socket.on(
       "sendMessage",
       async ({ roomId, sender, text, bookingId, fileUrl, fileType, isAnonymous }) => {
@@ -71,17 +62,18 @@ export const setupBookedSessionSocket = (io) => {
           populatedMessage = await newMsg.populate("sender", "username profileImage");
         }
 
-        bookedNamespace.to(roomId).emit("newMessage", populatedMessage);
+        bookedNamespace.to(roomId).emit("receiveMessage", populatedMessage);
       }
     );
 
-    // ---- Video call signaling ----
-
+    // ===== Video Call Signaling =====
     socket.on("callUser", ({ userToCall, signalData, from, bookingId }) => {
       const targetSocketId = bookedUserSocketMap.get(userToCall);
       if (targetSocketId) {
-        bookedNamespace.to(targetSocketId).emit("callOffer", signalData, from, bookingId);
-        console.log(`callOffer: from ${from} → user ${userToCall}`);
+        bookedNamespace
+          .to(targetSocketId)
+          .emit("callOffer", signalData, from, bookingId);
+        console.log(`📞 callOffer: from ${from} → ${userToCall}`);
       }
     });
 
@@ -89,35 +81,29 @@ export const setupBookedSessionSocket = (io) => {
       const targetSocketId = bookedUserSocketMap.get(to);
       if (targetSocketId) {
         bookedNamespace.to(targetSocketId).emit("callAnswer", signal);
-        console.log(`callAnswer emitted to ${to}`);
+        console.log(`✅ callAnswer emitted to ${to}`);
       }
     });
 
     socket.on("iceCandidate", ({ to, candidate }) => {
       const targetSocketId = bookedUserSocketMap.get(to);
-      if (targetSocketId) {
+      if (targetSocketId)
         bookedNamespace.to(targetSocketId).emit("iceCandidate", candidate);
-        // Optional logging
-        // console.log(`iceCandidate forwarded to ${to}`);
-      }
     });
 
     socket.on("callEnded", ({ to }) => {
       const targetSocketId = bookedUserSocketMap.get(to);
-      if (targetSocketId) {
+      if (targetSocketId)
         bookedNamespace.to(targetSocketId).emit("callEnded");
-        console.log(`callEnded emitted to ${to}`);
-      }
+      console.log(`🛑 callEnded emitted to ${to}`);
     });
 
-    // Disconnect cleanup
     socket.on("disconnect", () => {
       onlineBookedUsers--;
       bookedNamespace.emit("updateOnlineUsers", { count: onlineBookedUsers });
-
       if (socket.userId) {
         bookedUserSocketMap.delete(socket.userId);
-        console.log(`User disconnected: ${socket.userId}`);
+        console.log(`❌ User disconnected: ${socket.userId}`);
       }
     });
   });
